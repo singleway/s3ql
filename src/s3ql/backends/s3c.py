@@ -68,10 +68,11 @@ class Backend(AbstractBackend, metaclass=ABCDocstMeta):
             self.ssl_context = get_ssl_context(
                 options.backend_options.get('ssl-ca-path', None))
 
-        (host, port, bucket_name, prefix) = self._parse_storage_url(
+        (host, port, subpath, bucket_name, prefix) = self._parse_storage_url(
             options.storage_url, self.ssl_context)
 
         self.options = options.backend_options
+        self.subpath = subpath
         self.bucket_name = bucket_name
         self.prefix = prefix
         self.hostname = host
@@ -104,6 +105,7 @@ class Backend(AbstractBackend, metaclass=ABCDocstMeta):
         hit = re.match(r'^[a-zA-Z0-9]+://' # Backend
                        r'([^/:]+)' # Hostname
                        r'(?::([0-9]+))?' # Port
+                       r'/(?:([^/]+)/)?' # Subpath
                        r'/([^/]+)' # Bucketname
                        r'(?:/(.*))?$', # Prefix
                        storage_url)
@@ -117,10 +119,11 @@ class Backend(AbstractBackend, metaclass=ABCDocstMeta):
             port = 443
         else:
             port = 80
-        bucketname = hit.group(3)
-        prefix = hit.group(4) or ''
+        subpath = hit.group(3) or ''
+        bucketname = hit.group(4)
+        prefix = hit.group(5) or ''
 
-        return (hostname, port, bucketname, prefix)
+        return (hostname, port, subpath, bucketname, prefix)
 
     def _get_conn(self):
         '''Return connection to server'''
@@ -442,6 +445,8 @@ class Backend(AbstractBackend, metaclass=ABCDocstMeta):
     def _do_request(self, method, path, subres=None, query_string=None,
                     headers=None, body=None):
         '''Send request, read and return response object'''
+        if self.subpath:
+            path = '/{}{}'.format(self.subpath, path)
 
         log.debug('started with %s %s?%s, qs=%s', method, path, subres, query_string)
 
